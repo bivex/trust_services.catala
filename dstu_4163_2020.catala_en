@@ -1,0 +1,447 @@
+# ДСТУ 4163:2020 «Уніфікована система організаційно-розпорядчої документації.
+# Вимоги до оформлення документів»
+# (ДП «УкрНДНЦ», наказ № 144 від 01.07.2020; чинний з 01.09.2021; замінив ДСТУ 4163-2003)
+#
+# Encodes COMPUTABLE provisions only:
+#   §4.4   — mandatory реквізити of any document (legal-force core)
+#   §6.1   — paper formats (A3/A4/A5)
+#   §6.2   — page margins (left 30, right 10, top/bottom 20 mm)
+#   §6.5   — реквізит placement tolerance (±2 mm)
+#   §6.7   — реквізит alignment (centered/flag), no underlining
+#   §6.8   — specific-view blank production threshold (>2000/yr)
+#   §6.9   — реквізити permitted per blank type
+#   §7.2   — typography (Times New Roman; body 12–14 pt; small 8–12 pt; doc-type 14–16 pt)
+#   §7.3   — line spacing by format (A4 1–1.5; A5 1)
+#   §7.6   — max line length of multi-line реквізити (73 mm / 28 chars)
+#   §7.7   — left-field indents (paragraph 10, addressee 90, approval/restriction 100, signature 125 mm)
+#   §7.10  — page numbering (2nd+ pages, top-center, Arabic, first not numbered, no "сторінка")
+#   §7.11  — print side by retention term (permanent/long-term → one side; temporary → both allowed)
+#   §5.1   — heraldic image size (17×12 mm); emblem ≤17 mm
+#   §5.10  — QR code size (21×21 mm); date styles; joint-document single date
+#   §5.15  — addressee limit (≤4; else distribution list)
+#   §5.21  — appendices >10 → inventory
+#   §5.31  — state-registration free space (60×100 mm)
+#
+# Cross-links to trust_services.catala_en:
+#   §4.4 реквізит 22 — for e-documents: електронний підпис / електронна печатка (= Art.18 КЕП)
+#   §4.4 відмітка 32 / QR (§5.10) — carries data about КЕП/печатка + кваліфіковані позначки часу
+#   §7.11 retention — mirrors archival retention (Закон 3814-12), which trust-law Art.26.4 applies to e-docs
+#
+# Non-computable (omitted): layout coordinate schemas (Додаток А), sample blanks (Додаток Б),
+# example documents (Додаток В), bibliographic references (Додаток Г), full grammar of each реквізит.
+#
+# Locale: English (.catala_en). Prose: Ukrainian. Identifiers: ASCII.
+# Measurements are whole numbers → modelled as `integer` (mm / pt / units).
+
+```catala-metadata
+declaration enumeration PaperFormat:
+  -- A4   # 210 x 297 mm
+  -- A5   # 210 x 148 mm
+  -- A3   # 297 x 420 mm (таблиці)
+
+declaration enumeration BlankType:
+  -- General       # загальний бланк юридичної особи
+  -- Letter        # бланк листа
+  -- SpecificView  # бланк конкретного виду документа
+
+declaration enumeration RequisiteAlignment:
+  -- Centered  # центрований
+  -- Flag      # прапоровий
+
+declaration enumeration StorageTerm:
+  -- Temporary   # до 10 років включно
+  -- LongTerm    # понад 10 років
+  -- Permanent   # постійне зберігання
+
+declaration enumeration PrintSide:
+  -- OneSide
+  -- BothSides
+
+declaration enumeration DateStyle:
+  -- Digital         # 07.12.2019  (день.місяць.рік)
+  -- ReverseDigital  # 2019.05.25  (рік.місяць.день)
+  -- VerbalNumeric   # 07 грудня 2019 року
+
+declaration structure DocRequisites:
+  data r04_org_name content boolean        # найменування юридичної особи
+  data r09_doc_type content boolean        # назва виду документа
+  data r10_date content boolean            # дата документа
+  data r11_reg_index content boolean       # реєстраційний індекс
+  data r19_title content boolean           # заголовок до тексту
+  data r20_text content boolean            # текст документа
+  data r22_paper_signature content boolean # підпис (паперовий)
+  data electronic_signature content boolean
+  data electronic_seal content boolean
+
+declaration structure PageMarginsMm:
+  data left content integer
+  data right content integer
+  data top content integer
+  data bottom content integer
+```
+
+## §4.4. Обов’язкові реквізити документа
+
+Документи, що їх створюють юридичні особи, обов’язково повинні мати: найменування
+юридичної особи (04), назву виду документа (09 — **не зазначають на листах**), дату
+документа (10), реєстраційний індекс (11), заголовок до тексту (19), текст документа (20),
+підпис (22). Для електронних документів підпис (22) — це електронний підпис або
+електронна печатка в разі відсутності електронного підпису.
+
+```catala-metadata
+declaration scope MandatoryRequisites:
+  input is_letter content boolean
+  input is_electronic content boolean
+  input requisites content DocRequisites
+  output signature_satisfied content boolean
+  output missing_count content integer
+  output conforms content boolean
+```
+
+```catala
+scope MandatoryRequisites:
+
+  definition signature_satisfied equals
+    if is_electronic then
+      requisites.electronic_signature or requisites.electronic_seal
+    else
+      requisites.r22_paper_signature
+
+  definition missing_count equals
+    (if not requisites.r04_org_name then 1 else 0) +
+    (if (not is_letter) and (not requisites.r09_doc_type) then 1 else 0) +
+    (if not requisites.r10_date then 1 else 0) +
+    (if not requisites.r11_reg_index then 1 else 0) +
+    (if not requisites.r19_title then 1 else 0) +
+    (if not requisites.r20_text then 1 else 0) +
+    (if not signature_satisfied then 1 else 0)
+
+  definition conforms equals missing_count = 0
+```
+
+## §6.1, §6.2, §6.5. Формат паперу, поля та допуск розташування
+
+Бланки виготовляють на папері формату А4 (210×297), А5 (210×148); допустимо А3
+(297×420) для таблиць. Поля: ліве 30, праве 10, верхнє й нижнє по 20 мм. Реквізити
+розміщують із допуском ±2 мм (§6.5).
+
+```catala-metadata
+declaration scope DocumentGeometry:
+  input format content PaperFormat
+  input margins content PageMarginsMm
+  input requisite_offset_mm content integer  # |фактичне − номінальне|
+  output format_is_standard content boolean
+  output margins_conform content boolean
+  output placement_within_tolerance content boolean
+```
+
+```catala
+scope DocumentGeometry:
+
+  definition format_is_standard equals
+    format = A4 or format = A5 or format = A3
+
+  definition margins_conform equals
+    margins.left = 30 and
+    margins.right = 10 and
+    margins.top = 20 and
+    margins.bottom = 20
+
+  definition placement_within_tolerance equals
+    requisite_offset_mm <= 2
+```
+
+## §6.7. Розташування реквізитів бланка
+
+Реквізити 03,04,05,06,08,09 розміщують центрованим або прапоровим способом.
+**Не дозволено** підкреслювати або відокремлювати реквізити бланка рискою.
+
+```catala-metadata
+declaration scope RequisiteFormatting:
+  input alignment content RequisiteAlignment
+  input underlined_or_separated content boolean
+  output alignment_valid content boolean
+  output conforms content boolean
+```
+
+```catala
+scope RequisiteFormatting:
+
+  definition alignment_valid equals
+    alignment = Centered or alignment = Flag
+
+  definition conforms equals
+    alignment_valid and (not underlined_or_separated)
+```
+
+## §7.2, §7.6. Типографіка та довжина рядка
+
+Для тексту — гарнітура Times New Roman, 12–14 pt. Довідкові дані/код/виконавець/
+виноски — 8–12 pt. Назва виду документа — 14–16 pt (розріджений). Максимальна
+довжина рядка багаторядкових реквізитів (крім тексту) — 73 мм (28 друкованих знаків).
+
+```catala-metadata
+declaration scope Typography:
+  input is_times_new_roman content boolean
+  input body_size_pt content integer
+  input small_size_pt content integer
+  input doc_type_size_pt content integer
+  input multiline_row_chars content integer
+  output font_face_conforms content boolean
+  output body_size_conforms content boolean
+  output small_size_conforms content boolean
+  output doc_type_size_conforms content boolean
+  output row_length_conforms content boolean
+```
+
+```catala
+scope Typography:
+
+  definition font_face_conforms equals
+    is_times_new_roman
+
+  definition body_size_conforms equals
+    body_size_pt >= 12 and body_size_pt <= 14
+
+  definition small_size_conforms equals
+    small_size_pt >= 8 and small_size_pt <= 12
+
+  definition doc_type_size_conforms equals
+    doc_type_size_pt >= 14 and doc_type_size_pt <= 16
+
+  definition row_length_conforms equals
+    multiline_row_chars <= 28
+```
+
+## §7.3. Міжрядкові інтервали
+
+А4 — 1–1,5 інтервали; А5 — 1 інтервал. (А3 для таблиць — за потреби інші.)
+
+```catala-metadata
+declaration scope LineSpacing:
+  input format content PaperFormat
+  input body_spacing content decimal
+  output spacing_conforms content boolean
+```
+
+```catala
+scope LineSpacing:
+
+  definition spacing_conforms equals
+    match format with pattern
+    -- A4 : body_spacing >= 1.0 and body_spacing <= 1.5
+    -- A5 : body_spacing = 1.0
+    -- A3 : body_spacing >= 1.0 and body_spacing <= 1.5
+```
+
+## §7.7. Відступи від лівого поля
+
+Абзаци тексту — 10 мм; «Адресат» — 90 мм; «Гриф затвердження» та «Гриф обмеження
+доступу» — 100 мм; розшифрування підпису — 125 мм.
+
+```catala-metadata
+declaration scope LeftIndentation:
+  input paragraph_indent_mm content integer
+  input addressee_indent_mm content integer
+  input approval_indent_mm content integer
+  input restriction_indent_mm content integer
+  input signature_decode_indent_mm content integer
+  output conforms content boolean
+```
+
+```catala
+scope LeftIndentation:
+
+  definition conforms equals
+    paragraph_indent_mm = 10 and
+    addressee_indent_mm = 90 and
+    approval_indent_mm = 100 and
+    restriction_indent_mm = 100 and
+    signature_decode_indent_mm = 125
+```
+
+## §7.10. Нумерація сторінок
+
+На двох і більше сторінках друга та наступні нумеруються посередині верхнього поля
+арабськими цифрами без слова «сторінка» та розділових знаків. Першу сторінку не
+нумерують.
+
+```catala-metadata
+declaration scope PageNumbering:
+  input page_count content integer
+  input first_page_numbered content boolean
+  input second_page_numbered content boolean
+  input uses_word_or_punctuation content boolean
+  output requires_numbering content boolean
+  output conforms content boolean
+```
+
+```catala
+scope PageNumbering:
+
+  definition requires_numbering equals
+    page_count >= 2
+
+  definition conforms equals
+    (not first_page_numbered) and
+    ((not requires_numbering) or second_page_numbered) and
+    (not uses_word_or_punctuation)
+```
+
+## §7.11. Бік друку за строком зберігання
+
+Документи постійного та тривалого (понад 10 років) зберігання друкують на одному
+боці аркуша. Документи тимчасового строку (до 10 років включно) можна друкувати на
+обох боках.
+
+```catala-metadata
+declaration scope PrintSideByRetention:
+  input storage_term content StorageTerm
+  output prescribed_print_side content PrintSide
+  output both_sides_allowed content boolean
+```
+
+```catala
+scope PrintSideByRetention:
+
+  definition prescribed_print_side equals
+    match storage_term with pattern
+    -- Permanent : OneSide
+    -- LongTerm  : OneSide
+    -- Temporary : BothSides
+
+  definition both_sides_allowed equals
+    storage_term = Temporary
+```
+
+## §5.15. Кількість адресатів
+
+Документ не може мати більше чотирьох адресатів. Більше ніж чотирьом — складають
+список розсилання, а на кожному документі зазначають лише одного адресата.
+
+```catala-metadata
+declaration scope AddresseeRule:
+  input addressee_count content integer
+  output exceeds_max content boolean
+  output distribution_list_required content boolean
+```
+
+```catala
+scope AddresseeRule:
+
+  definition exceeds_max equals
+    addressee_count > 4
+
+  definition distribution_list_required equals
+    addressee_count > 4
+```
+
+## §5.21. Додатки
+
+Якщо документ містить більше десяти додатків, складають опис.
+
+```catala-metadata
+declaration scope AppendixRule:
+  input appendix_count content integer
+  output inventory_required content boolean
+```
+
+```catala
+scope AppendixRule:
+
+  definition inventory_required equals
+    appendix_count > 10
+```
+
+## §6.8, §6.9. Бланки: реквізити за видом та поріг виготовлення
+
+Виготовлення бланків конкретних видів документів допустимо, якщо їх кількість
+перевищує 2 тис. одиниць на рік (§6.8). Склад реквізитів за видом бланка (§6.9).
+
+```catala-metadata
+declaration scope BlankRequisites:
+  input blank_type content BlankType
+  input requisite_code content integer   # 1..32
+  input annual_units content integer     # §6.8
+  output permitted_codes content list of integer
+  output requisite_permitted content boolean
+  output specific_view_blank_justified content boolean
+```
+
+```catala
+scope BlankRequisites:
+
+  definition permitted_codes equals
+    match blank_type with pattern
+    -- General      : [1; 2; 3; 4; 5; 13]
+    -- Letter       : [1; 2; 3; 4; 5; 6; 8]
+    -- SpecificView : [1; 2; 3; 4; 5; 9; 13]
+
+  definition requisite_permitted equals
+    (combine all c among permitted_codes
+      in acc initially 0 with
+        if c = requisite_code then acc + 1 else acc) > 0
+
+  definition specific_view_blank_justified equals
+    blank_type = SpecificView and annual_units > 2000
+```
+
+## §5.10. Дата документа та спільні документи
+
+Дату оформлюють цифровим (07.12.2019), зворотним цифровим (2019.05.25) або
+словесно-цифровим (07 грудня 2019 року) способом. У спільних документах зазначають
+одну дату — що відповідає даті проставлення останнього підпису.
+
+```catala-metadata
+declaration scope DateRule:
+  input style content DateStyle
+  input is_joint_document content boolean
+  output style_valid content boolean
+  output joint_uses_single_date content boolean
+```
+
+```catala
+scope DateRule:
+
+  definition style_valid equals
+    style = Digital or style = ReverseDigital or style = VerbalNumeric
+
+  definition joint_uses_single_date equals
+    is_joint_document
+```
+
+## §5.1, §5.10, §5.31. Розміри зображень та службових зон
+
+Державний Герб України: висота 17 мм, ширина 12 мм. Емблема: рекомендована висота
+≤17 мм. QR-код: 21×21 мм. Для запису про державну реєстрацію — вільне місце
+60×100 мм у верхньому правому куті.
+
+```catala-metadata
+declaration scope SymbolDimensions:
+  input coat_of_arms_height_mm content integer
+  input coat_of_arms_width_mm content integer
+  input emblem_height_mm content integer
+  input qr_side_mm content integer
+  input registration_zone_height_mm content integer
+  input registration_zone_width_mm content integer
+  output coat_of_arms_conforms content boolean
+  output emblem_height_conforms content boolean
+  output qr_conforms content boolean
+  output registration_zone_conforms content boolean
+```
+
+```catala
+scope SymbolDimensions:
+
+  definition coat_of_arms_conforms equals
+    coat_of_arms_height_mm = 17 and coat_of_arms_width_mm = 12
+
+  definition emblem_height_conforms equals
+    emblem_height_mm <= 17
+
+  definition qr_conforms equals
+    qr_side_mm = 21
+
+  definition registration_zone_conforms equals
+    registration_zone_height_mm = 60 and registration_zone_width_mm = 100
+```
