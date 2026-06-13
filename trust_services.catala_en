@@ -1,0 +1,548 @@
+# Закон України «Про електронну ідентифікацію та електронні довірчі послуги»
+# Law of Ukraine "On Electronic Identification and Electronic Trust Services"
+# (№ 2155-VIII of 05.10.2017, as amended through Law № 4017-IX of 10.10.2024)
+#
+# Encodes COMPUTABLE provisions only:
+#   Art.1    — core concepts (enums / structures)
+#   Art.4-1  — pseudonym-use flag
+#   Art.15   — trust-level assignment (qualified → high, advanced+qual-cert → medium)
+#   Art.16.5 — financial guarantee minimum (1000 × minimum wage)
+#   Art.22   — identification methods (4 ways)
+#   Art.23   — qualified certificate mandatory (exhaustive) contents
+#   Art.24   — certificate validity conditions
+#   Art.25   — qualified certificate lifecycle: cancel / block / restore + 2h / 24h deadlines
+#   Art.30   — qualified-provider status: 15-working-day decision + refusal grounds
+#   Art.31   — cessation effective 3 months after notice publication
+#   Art.32   — conformity re-assessment every 24 months
+#   Art.36   — provider liability: rebuttable fault presumption (qualified) vs. claimant-proofs (non-qualified)
+#   Art.11-2 / Art.13 — incident notification deadlines (≤24h controller, ≤2h users)
+#   Trans.5/6 — legacy digital signatures recognised up to 2 years
+#
+# Non-computable provisions (institutional structure, procedure details,
+# inspection formalities, administrative-act appeals) are omitted.
+#
+# Convention (matches repo): locale English (.catala_en), prose Ukrainian,
+# identifiers ASCII. Working-day deadlines approximated by calendar days
+# (15 робочих днів ≈ 21 календарний день). Hour deadlines modelled as integer
+# thresholds with an explicit in-time boolean.
+
+```catala-metadata
+declaration enumeration TrustLevel:
+  -- Low
+  -- Medium
+  -- High
+
+declaration enumeration CertificateStatus:
+  # Art.24 / Art.25: чинний / заблокований / скасований.
+  # Art.25(13) "поновлений" = restored-to-Active per Art.25(12).
+  -- Active
+  -- Blocked
+  -- Cancelled
+
+declaration enumeration ProviderKind:
+  -- QualifiedProvider
+  -- NonQualifiedProvider
+  -- CertificationCenter        # засвідчувальний центр (Art.9)
+  -- CentralCertifyingAuthority # центральний засвідчувальний орган (Art.7)
+
+declaration enumeration IdentificationMethod:
+  # Art.22(2)
+  -- InPerson                   # п.1 — особиста присутність
+  -- RemoteWithTrustMeans       # п.2 — віддалено, високий/середній засіб + MFA
+  -- ViaExistingQualifiedCert   # п.3 — через чинний квал. сертифікат
+  -- OtherEquivalent            # п.4 — інший еквівалентний спосіб
+
+declaration enumeration BurdenOfProof:
+  -- Claimant
+  -- Provider
+
+declaration enumeration DecisionOutcome:
+  -- Granted
+  -- Refused
+  -- Pending
+
+declaration structure IncidentTiming:
+  data controller_notification_hours content integer
+  data user_notification_hours content integer
+
+declaration structure GuaranteeFunding:
+  data deposited_amount content money
+  data insured_amount content money
+  data minimum_wage content money
+
+declaration structure QualifiedCertificate:
+  data status content CertificateStatus
+  data validity_period_expired content boolean
+  data issuer_certificate_valid content boolean
+  data contains_all_mandatory_fields content boolean   # Art.23(2)
+  data contains_false_info content boolean             # Art.23(7)
+  data pseudonym_used content boolean                  # Art.23(2) item 4
+
+declaration structure SignatureInstrument:
+  # What the instrument creates, used to derive trust level (Art.15(3)).
+  data is_qualified content boolean
+  data is_advanced_based_on_qualified_certificate content boolean
+  data claimed_scheme_trust_level content TrustLevel
+```
+
+## Розділ I. Загальні положення
+
+### Стаття 4-1. Використання псевдонімів
+
+Фізичні особи під час отримання послуг мають право замість ПІБ використовувати
+псевдонім у випадках, визначених законом, за умови обов’язкового зазначення про
+його використання у засобах ідентифікації та сертифікатах відкритих ключів
+(ч.1 ст.4-1). Використання псевдоніма не звільняє надавача від обов’язку
+ідентифікації особи (ч.2 ст.4-1).
+
+```catala-metadata
+declaration scope PseudonymUse:
+  input case_permitted_by_law content boolean
+  input noted_in_means_and_certificate content boolean
+  output pseudonym_use_allowed content boolean
+  output identification_still_required content boolean
+```
+
+```catala
+scope PseudonymUse:
+
+  definition pseudonym_use_allowed equals
+    case_permitted_by_law and noted_in_means_and_certificate
+
+  definition identification_still_required equals true
+```
+
+## Розділ III. Електронна ідентифікація
+
+### Стаття 15. Рівні довіри до засобів та схем електронної ідентифікації
+
+Використання кваліфікованих електронних підписів та печаток забезпечує
+**високий** рівень довіри; використання удосконалених підписів/печаток, що
+базуються на кваліфікованих сертифікатах, — **середній** рівень довіри
+(ч.3 ст.15).
+
+```catala-metadata
+declaration scope InstrumentTrustLevel:
+  input instrument content SignatureInstrument
+  output derived_trust_level content TrustLevel
+```
+
+```catala
+scope InstrumentTrustLevel:
+
+  definition derived_trust_level equals
+    if instrument.is_qualified then
+      High
+    else if instrument.is_advanced_based_on_qualified_certificate then
+      Medium
+    else
+      instrument.claimed_scheme_trust_level
+```
+
+### Багатофакторна автентифікація (ст.1 пп.2, 60)
+
+Багатофакторна автентифікація — автентифікація з використанням двох або більше
+факторів з **різних** груп (знання / володіння / притаманність). Тому перевіряємо
+кількість **різних** представленних груп — їх має бути не менше двох.
+
+```catala-metadata
+declaration scope MultiFactorAuth:
+  input knowledge_factor_present content boolean
+  input possession_factor_present content boolean
+  input inherence_factor_present content boolean
+  output distinct_group_count content integer
+  output is_multi_factor content boolean
+```
+
+```catala
+scope MultiFactorAuth:
+
+  definition distinct_group_count equals
+    (if knowledge_factor_present then 1 else 0) +
+    (if possession_factor_present then 1 else 0) +
+    (if inherence_factor_present then 1 else 0)
+
+  definition is_multi_factor equals
+    distinct_group_count >= 2
+```
+
+## Розділ IV. Електронні довірчі послуги
+
+### Стаття 16, частина 5. Фінансове забезпечення діяльності кваліфікованого надавача
+
+Діяльність з надання кваліфікованих електронних довірчих послуг здійснюється за
+умови внесення коштів на спеціальний рахунок або страхування відповідальності;
+розмір внеску / страхової суми **не може становити менше 1000 розмірів
+мінімальної заробітної плати** (ч.5 ст.16). Відновлення розміру — протягом
+трьох місяців у разі зміни мінімальної зарплати або відшкодування збитків
+(ст.13 ч.5 абз.2).
+
+```catala-metadata
+declaration scope ProviderGuarantee:
+  input funding content GuaranteeFunding
+  output guarantee_minimum content money
+  output effective_cover content money
+  output meets_minimum content boolean
+  output restoration_deadline_months content integer
+```
+
+```catala
+scope ProviderGuarantee:
+
+  definition guarantee_minimum equals
+    funding.minimum_wage * (decimal of 1000)
+
+  definition effective_cover equals
+    funding.deposited_amount + funding.insured_amount
+
+  definition meets_minimum equals
+    effective_cover >= guarantee_minimum
+
+  definition restoration_deadline_months equals 3
+```
+
+### Стаття 22. Ідентифікація особи під час формування та видачі кваліфікованого сертифіката
+
+Формування та видача кваліфікованого сертифіката без ідентифікації особи не
+допускаються (ч.1 ст.22). Ідентифікація здійснюється одним зі способів (ч.2):
+
+```catala-metadata
+declaration scope IdentityVerification:
+  input method content IdentificationMethod
+  input remote_means_has_high_or_medium_trust content boolean
+  input multi_factor_used content boolean
+  input referenced_cert_is_valid content boolean
+  input equivalent_reliability_confirmed content boolean
+  output method_eligible content boolean
+  output identification_completed content boolean
+```
+
+```catala
+scope IdentityVerification:
+
+  definition method_eligible equals
+    match method with pattern
+    -- InPerson :
+        true
+    -- RemoteWithTrustMeans :
+        remote_means_has_high_or_medium_trust and multi_factor_used
+    -- ViaExistingQualifiedCert :
+        referenced_cert_is_valid
+    -- OtherEquivalent :
+        equivalent_reliability_confirmed
+
+  definition identification_completed equals method_eligible
+```
+
+### Стаття 23. Кваліфіковані сертифікати відкритих ключів — обов’язкові дані
+
+Перелік обов’язкових вимог до кваліфікованих сертифікатів відкритих ключів
+є **вичерпним** (ч.3 ст.23). Правочин може бути визнаний судом недійсним, якщо
+сертифікат не містить передбачених даних або містить недостовірні відомості
+(ч.7 ст.23).
+
+```catala-metadata
+declaration scope CertificateConformance:
+  input certificate content QualifiedCertificate
+  output conforms content boolean
+  output act_may_be_invalidated content boolean
+```
+
+```catala
+scope CertificateConformance:
+
+  definition conforms equals
+    certificate.contains_all_mandatory_fields and
+    (not certificate.contains_false_info)
+
+  definition act_may_be_invalidated equals
+    (not conforms)
+```
+
+### Стаття 24. Чинність кваліфікованих сертифікатів відкритих ключів
+
+Кваліфікований сертифікат вважається чинним, якщо на момент перевірки:
+строк дії не закінчився; статус не змінено на скасований/заблокований;
+сертифікат суб’єкта, що видав сертифікат, також був чинним (ч.1 ст.24).
+
+```catala-metadata
+declaration scope CertificateValidity:
+  input certificate content QualifiedCertificate
+  output is_valid content boolean
+```
+
+```catala
+scope CertificateValidity:
+
+  definition is_valid equals
+    (not certificate.validity_period_expired) and
+    (not (certificate.status = Cancelled or
+          certificate.status = Blocked)) and
+    certificate.issuer_certificate_valid
+```
+
+### Стаття 25. Скасування, блокування та поновлення кваліфікованих сертифікатів відкритих ключів
+
+**Центральна обчислювана модель:** скінченний автомат статусів сертифіката з
+умовами переходів та жорсткими годинними строками (2 години — на скасування /
+блокування / поновлення; 24 години — інформування надавачів про компрометацію
+ключа ЦЗО/ЗЦ). Скасований сертифікат поновленню **не підлягає** (ч.5 ст.25).
+
+```catala-metadata
+declaration scope CertificateLifecycle:
+  input current_status content CertificateStatus
+  # Тригери скасування (ч.1 ст.25)
+  input user_request_cancel content boolean
+  input authorized_rep_request_cancel content boolean
+  input holder_deceased_or_entity_terminated content boolean
+  input id_data_changed content boolean
+  input false_id_data_provided content boolean
+  input key_compromise_confirmed content boolean
+  input court_decision_cancel content boolean
+  # Тригери блокування (ч.6, ч.7 ст.25)
+  input user_request_block content boolean
+  input authorized_rep_request_block content boolean
+  input key_compromise_suspected content boolean
+  input court_decision_block content boolean
+  input material_contract_breach content boolean
+  input controller_decision_block content boolean
+  # Тригери поновлення (ч.10, ч.11 ст.25)
+  input user_request_restore content boolean
+  input authorized_rep_request_restore content boolean
+  input compromise_suspension_proven_false content boolean
+  input court_decision_restore content boolean
+  input qualified_provider_status_restored content boolean
+  # Вихід
+  output cancel_triggered content boolean
+  output block_triggered content boolean
+  output restore_eligible content boolean
+  output target_status content CertificateStatus
+  output transition_deadline_hours content integer
+  output compromise_notice_deadline_hours content integer
+```
+
+```catala
+scope CertificateLifecycle:
+
+  definition cancel_triggered equals
+    user_request_cancel or
+    authorized_rep_request_cancel or
+    holder_deceased_or_entity_terminated or
+    id_data_changed or
+    false_id_data_provided or
+    key_compromise_confirmed or
+    court_decision_cancel
+
+  definition block_triggered equals
+    user_request_block or
+    authorized_rep_request_block or
+    key_compromise_suspected or
+    court_decision_block or
+    material_contract_breach or
+    controller_decision_block
+
+  # Поновлення можливе лише зі статусу "заблокований"; скасований — не поновлюється.
+  definition restore_eligible equals
+    current_status = Blocked and (
+      user_request_restore or
+      authorized_rep_request_restore or
+      compromise_suspension_proven_false or
+      court_decision_restore or
+      qualified_provider_status_restored)
+
+  definition target_status equals
+    if cancel_triggered then
+      Cancelled
+    else if block_triggered then
+      Blocked
+    else if restore_eligible then
+      Active
+    else
+      current_status
+
+  # Усі переходи за ст.25 мають бути виконані протягом 2 годин.
+  definition transition_deadline_hours equals
+    match target_status with pattern
+    -- Cancelled : 2
+    -- Blocked   : 2
+    -- Active    : 2
+
+  # ч.2 ст.25: ЦЗО/ЗЦ інформує надавачів про компрометацію власного ключа ≤24 год.
+  definition compromise_notice_deadline_hours equals 24
+```
+
+### Стаття 30. Набуття статусу кваліфікованого надавача електронних довірчих послуг
+
+Центральний засвідчувальний орган (або засвідчувальний центр) приймає рішення
+про внесення до Довірчого списку або надсилає вмотивовану відмову протягом
+**15 робочих днів** з дня реєстрації заяви (ч.4 ст.30). Підстави відмови —
+неповний пакет / порушення вимог до документів / недостовірні відомості,
+пошкодження, виправлення, дописки (ч.6 ст.7-заходи / ч.6 ст.30).
+
+```catala-metadata
+declaration scope QualifiedProviderApplication:
+  input application_filed_date content date
+  input documents_complete content boolean
+  input documents_meet_requirements content boolean
+  input no_false_or_damaged_info content boolean
+  output decision_due_date content date
+  output outcome content DecisionOutcome
+```
+
+```catala
+scope QualifiedProviderApplication:
+
+  # 15 робочих днів ≈ 21 календарний день.
+  definition decision_due_date equals
+    application_filed_date + 21 day
+
+  definition outcome equals
+    if documents_complete and
+       documents_meet_requirements and
+       no_false_or_damaged_info then
+      Granted
+    else
+      Refused
+```
+
+### Стаття 31. Припинення діяльності з надання кваліфікованих електронних довірчих послуг
+
+Кваліфікований надавач припиняє діяльність через **три місяці** з дня
+опублікування центральним засвідчувальним органом (або засвідчувальним центром)
+повідомлення про припинення (ч.5 ст.31). До цього дня він зобов’язаний надавати
+послуги, **крім** формування нових кваліфікованих сертифікатів (ч.6 ст.31).
+
+```catala-metadata
+declaration scope ProviderCessation:
+  input notice_publication_date content date
+  output cessation_effective_date content date
+  output may_issue_new_certificates content boolean
+```
+
+```catala
+scope ProviderCessation:
+
+  definition cessation_effective_date equals
+    notice_publication_date + 3 month
+
+  definition may_issue_new_certificates equals false
+```
+
+### Стаття 32. Оцінка відповідності — періодичність
+
+Кваліфіковані надавчі, відомості про які внесені до Довірчого списку, повинні
+**кожні 24 місяці** за власний рахунок проходити процедуру оцінки відповідності
+(ч.6 ст.32).
+
+```catala-metadata
+declaration scope ConformityReassessment:
+  input last_assessment_date content date
+  output next_assessment_due content date
+```
+
+```catala
+scope ConformityReassessment:
+
+  definition next_assessment_due equals
+    last_assessment_date + 24 month
+```
+
+## Розділ II (Art.11-2, Art.13). Строки інформування про інциденти безпеки
+
+Надавачі послуг електронної ідентифікації (ст.11-2) та надавачі електронних
+довірчих послуг (ст.13) зобов’язані інформувати контролюючий орган про порушення
+конфіденційності/цілісності **не пізніше 24 годин**, а користувачів — **не пізніше
+2 годин** з моменту, коли стало відомо про порушення.
+
+```catala-metadata
+declaration scope IncidentNotification:
+  input timing content IncidentTiming
+  output controller_max_hours content integer
+  output user_max_hours content integer
+  output controller_notified_in_time content boolean
+  output user_notified_in_time content boolean
+```
+
+```catala
+scope IncidentNotification:
+
+  definition controller_max_hours equals 24
+  definition user_max_hours equals 2
+
+  definition controller_notified_in_time equals
+    timing.controller_notification_hours <= controller_max_hours
+
+  definition user_notified_in_time equals
+    timing.user_notification_hours <= user_max_hours
+```
+
+## Стаття 36. Відповідальність за порушення законодавства
+
+Надавач електронних довірчих послуг, засвідчувальний центр чи центральний
+засвідчувальний орган несуть відповідальність за шкоду, завдану з їх вини
+(ч.3 ст.36). Обов’язок доведення вини **некваліфікованого** надавача покладається
+на особу, яка вимагає відшкодування; **кваліфікований** надавач / ЗЦ / ЦЗО
+вважається винним, якщо не доведе, що шкоду завдано не з його вини (презумпція
+вини, що спростовується). Якщо надавач належним чином заздалегідь поінформував
+користувачів про обмеження використання послуг (зрозумілі для користувачів), він
+**не несе відповідальності** за шкоду від використання з порушенням цих обмежень
+(ч.3 абз.4 ст.36).
+
+```catala-metadata
+declaration scope ProviderLiability:
+  input provider_kind content ProviderKind
+  input limitation_notice_given content boolean
+  input notice_clear_to_users content boolean
+  input damage_from_use_violating_limits content boolean
+  output fault_presumed content boolean
+  output burden_of_proof content BurdenOfProof
+  output limitation_defense_applies content boolean
+```
+
+```catala
+scope ProviderLiability:
+
+  # Презумпція вини — для кваліфікованих суб'єктів (ч.3 ст.36, абз.3).
+  definition fault_presumed equals
+    provider_kind = QualifiedProvider or
+    provider_kind = CertificationCenter or
+    provider_kind = CentralCertifyingAuthority
+
+  definition burden_of_proof equals
+    if fault_presumed then Provider else Claimant
+
+  # Звільнення від відповідальності за шкоду від порушення доведених обмежень.
+  definition limitation_defense_applies equals
+    limitation_notice_given and
+    notice_clear_to_users and
+    damage_from_use_violating_limits
+```
+
+## Перехідні положення (пп.5, 6)
+
+Електронний цифровий підпис та посилений сертифікат відкритого ключа, видані за
+Законом «Про електронний цифровий підпис», визнаються як кваліфікований
+електронний підпис / кваліфікований сертифікат до закінчення строку дії
+посиленого сертифіката, **але не пізніше двох років** з дня набрання чинності
+цим Законом (пп.5, 6 перехідних положень).
+
+```catala-metadata
+declaration scope LegacySignatureRecognition:
+  input law_entry_into_force_date content date
+  input enhanced_cert_expiry_date content date
+  output recognition_cutoff content date
+  output recognized_until content date
+```
+
+```catala
+scope LegacySignatureRecognition:
+
+  definition recognition_cutoff equals
+    law_entry_into_force_date + 2 year
+
+  definition recognized_until equals
+    if enhanced_cert_expiry_date <= recognition_cutoff then
+      enhanced_cert_expiry_date
+    else
+      recognition_cutoff
+```

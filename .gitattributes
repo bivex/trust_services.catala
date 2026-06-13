@@ -1,0 +1,7 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Treat Catala literate sources as Catala on GitHub
+*.catala_en linguist-language=Catala
+*.catala_fr linguist-language=Catala
+*.catala_uk linguist-language=Catala
