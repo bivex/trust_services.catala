@@ -1,0 +1,131 @@
+# Закон України «Про захист інформації в інформаційно-комунікаційних системах»
+# Law of Ukraine "On Protection of Information in Information & Communication Systems"
+# (№ 80/94-ВР of 05.07.1994, as amended through Law № 4336-IX of 27.03.2025)
+#
+# Encodes COMPUTABLE provisions only:
+#   Art.4    — access to info in a system: owner-defined; for state resources /
+#              restricted-access info — defined by legislation; access without
+#              owner consent only where law provides
+#   Art.8    — processing conditions: state resources / restricted-access info in
+#              public-sector systems MUST be processed in security-authorized
+#              systems OR with an information-security conformity certificate
+#   Art.9    — protection responsibility on owner/holder; public-sector systems
+#              with state/restricted info MUST establish a cyber-defence unit and
+#              notify the special-comms authority of unauthorized actions
+#
+# Cross-link: this is the "захист інформації в ІКС" regime referenced by
+# Law № 851-IV Art.12 (integrity verification by other means) and complements
+# the restricted-access regime of Laws № 2657-XII Art.21 / № 2939-VI Art.6.
+# "Інформація з обмеженим доступом" here is the same facet protected by the
+# гриф обмеження доступу (реквізит 15 ДСТУ 4163:2020).
+#
+# Non-computable provisions (definitions Art.1, inter-party relations Arts.5-7,
+# state-body powers Art.10, liability Art.11, treaties Art.12, transitional)
+# are omitted.
+#
+# Convention (matches repo): locale English (.catala_en), prose Ukrainian,
+# identifiers ASCII.
+
+```catala-metadata
+declaration enumeration InfoCategory:
+  # Класифікація інформації в системі для режиму доступу/обробки/захисту.
+  -- StateResource                 # державні інформаційні ресурси
+  -- RestrictedByLaw               # інформація з обмеженим доступом (вимога захисту за законом)
+  -- Ordinary                      # звичайна інформація
+
+declaration enumeration SystemOwnerType:
+  # Тип власника/розпорядника системи (визначає публічно-правові вимоги).
+  -- PublicSector                  # органи влади, держ/комун. підприємства, ОМС
+  -- Private                       # приватний власник
+
+declaration enumeration AccessSource:
+  # Ст.4: ким визначається порядок доступу.
+  -- DefinedByOwner                # володільцем інформації
+  -- DefinedByLegislation          # законодавством (держресурси / обмежений доступ)
+
+declaration structure ProcessingSetup:
+  # Ст.8: умови обробки у публічно-секторній системі.
+  data category content InfoCategory
+  data owner_type content SystemOwnerType
+  data security_authorized content boolean          # авторизована з безпеки система
+  data has_conformity_certificate content boolean   # сертифікат відповідності стандарту ІБ
+
+declaration structure ProtectionSetup:
+  # Ст.9: забезпечення захисту у публічно-секторній системі.
+  data category content InfoCategory
+  data owner_type content SystemOwnerType
+  data cyber_defence_unit_established content boolean   # підрозділ із кіберзахисту / відповідальні особи
+```
+
+## Стаття 4. Доступ до інформації в системі
+
+Порядок доступу до інформації визначає володілець; для державних ресурсів або
+інформації з обмеженим доступом — законодавство (ч.1-2). Доступ без дозволу
+володільця — лише у випадках, передбачених законом (ч.3).
+
+```catala-metadata
+declaration scope AccessOrderSource:
+  input category content InfoCategory
+  output access_defined_by content AccessSource
+```
+
+```catala
+scope AccessOrderSource:
+  definition access_defined_by equals
+    match category with pattern
+    -- StateResource: AccessSource.DefinedByLegislation
+    -- RestrictedByLaw: AccessSource.DefinedByLegislation
+    -- Ordinary: AccessSource.DefinedByOwner
+```
+
+## Стаття 8. Умови обробки інформації в системі
+
+Державні ресурси або інформація з обмеженим доступом у системах публічного
+сектору мають оброблятися в авторизованих з безпеки системах АБО за наявності
+сертифіката відповідності стандарту інформаційної безпеки.
+
+```catala-metadata
+declaration scope ProcessingCompliance:
+  input setup content ProcessingSetup
+  output processing_compliant content boolean
+```
+
+```catala
+scope ProcessingCompliance:
+  definition processing_compliant equals
+    # Вимога стосується держресурсів / обмеженого доступу в публічному секторі;
+    # для звичайної інформації або приватних систем — поза цією нормою (ok).
+    if (setup.category = InfoCategory.Ordinary)
+       or (setup.owner_type = SystemOwnerType.Private) then
+      true
+    else
+      setup.security_authorized or setup.has_conformity_certificate
+```
+
+## Стаття 9. Забезпечення захисту інформації в системі
+
+Відповідальність за захист — на власнику/розпоряднику (ч.1). Система публічного
+сектору з державними ресурсами або інформацією з обмеженим доступом має утворити
+підрозділ із кіберзахисту або призначити відповідальних осіб (ч.2).
+
+```catala-metadata
+declaration scope ProtectionCompliance:
+  input setup content ProtectionSetup
+  output cyber_defence_required content boolean
+  output protection_compliant content boolean
+```
+
+```catala
+scope ProtectionCompliance:
+  # Підрозділ із кіберзахисту обовʼязковий для держресурсів / обмеженого доступу
+  # у публічному секторі.
+  definition cyber_defence_required equals
+    (setup.owner_type = SystemOwnerType.PublicSector)
+    and (setup.category <> InfoCategory.Ordinary)
+
+  definition protection_compliant equals
+    if cyber_defence_required then
+      setup.cyber_defence_unit_established
+    else
+      true
+```
