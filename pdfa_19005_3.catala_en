@@ -1,0 +1,166 @@
+# ISO 19005-3:2012 — Document management — Electronic document file format
+# for long-term preservation — Part 3: Use of ISO 32000-1 with support for
+# embedded files (PDF/A-3)
+#
+# Encodes COMPUTABLE technical requirements relevant to a document portal that
+# generates archival PDF (clause 6). Non-computable / reader-behaviour clauses
+# (rendering semantics, colour management math, transparency blending in
+# Annex A, conforming-reader duties in 5.5) are intentionally omitted.
+#
+# Scopes (1 per computable requirement group):
+#   - ConformanceLevel        (cl.5)      — A / B / U level requirement sets
+#   - Encryption              (6.1.3)     — Encrypt forbidden
+#   - FontEmbedding           (6.2.11.4)  — all rendered fonts embedded
+#   - ExternalStreams         (6.1.7)     — F/FFilter/FDecodeParams forbidden
+#   - Filters                 (6.1.7.2)   — LZWDecode forbidden
+#   - Actions                 (6.6.1)     — JavaScript/Launch/etc forbidden
+#   - OutputIntent            (6.2.3/4)   — required for uncalibrated colour
+#   - XmpIdentification       (6.6.4)     — pdfaid:part=3 + conformance A/B/U
+#   - ImplementationLimits    (6.1.13)    — numeric/string/name limits
+#   - ConformingFile          — aggregate: all mandatory checks pass
+
+```catala
+declaration enumeration PdfaLevel:
+  -- LevelA
+  -- LevelB
+  -- LevelU
+
+# --- cl.5 Conformance levels ---
+# Level B: all requirements except 6.2.11.7 (ToUnicode) and 6.7 (logical struct)
+# Level U: all requirements except 6.7 (logical structure / tagging)
+# Level A: all requirements (adds tagging + ToUnicode for full preservation)
+declaration scope ConformanceLevel:
+  input level content PdfaLevel
+  output requires_tagging content boolean       # 6.7 logical structure
+  output requires_tounicode content boolean      # 6.2.11.7 ToUnicode CMap
+
+scope ConformanceLevel:
+  definition requires_tagging equals (level = LevelA)
+  definition requires_tounicode equals (level = LevelA) or (level = LevelU)
+```
+
+# --- 6.1.3 Encryption forbidden ---
+
+```catala
+declaration scope Encryption:
+  input has_encrypt_key content boolean   # Encrypt present in trailer dict
+  output compliant content boolean
+
+scope Encryption:
+  definition compliant equals not has_encrypt_key
+```
+
+# --- 6.2.11.4 Font embedding: all fonts used for rendering shall be embedded ---
+
+```catala
+declaration scope FontEmbedding:
+  input total_fonts content integer
+  input embedded_fonts content integer
+  output compliant content boolean
+
+scope FontEmbedding:
+  definition compliant equals embedded_fonts >= total_fonts
+```
+
+# --- 6.1.7 External stream refs forbidden (F / FFilter / FDecodeParams) ---
+
+```catala
+declaration scope ExternalStreams:
+  input has_f_key content boolean
+  input has_ffilter_key content boolean
+  input has_fdecodeparams_key content boolean
+  output compliant content boolean
+
+scope ExternalStreams:
+  definition compliant equals
+    (not has_f_key) and (not has_ffilter_key) and (not has_fdecodeparams_key)
+```
+
+# --- 6.1.7.2 Filters: LZWDecode forbidden ---
+
+```catala
+declaration scope Filters:
+  input uses_lzwdecode content boolean
+  output compliant content boolean
+
+scope Filters:
+  definition compliant equals not uses_lzwdecode
+```
+
+# --- 6.6.1 Actions: JavaScript/Launch/Sound/Movie/etc forbidden ---
+
+```catala
+declaration scope Actions:
+  input has_javascript content boolean
+  input has_launch content boolean
+  input has_other_forbidden_action content boolean   # Sound/Movie/ResetForm/...
+  output compliant content boolean
+
+scope Actions:
+  definition compliant equals
+    (not has_javascript) and (not has_launch) and (not has_other_forbidden_action)
+```
+
+# --- 6.2.3 / 6.2.4 OutputIntent required when uncalibrated colour is used ---
+
+```catala
+declaration scope OutputIntent:
+  input uses_uncalibrated_colour content boolean   # DeviceRGB/Gray/CMYK
+  input has_pdfa_output_intent content boolean
+  output compliant content boolean
+
+scope OutputIntent:
+  definition compliant equals
+    (not uses_uncalibrated_colour) or has_pdfa_output_intent
+```
+
+# --- 6.6.4 XMP PDF/A identification: pdfaid:part=3, conformance in {A,B,U} ---
+
+```catala
+declaration scope XmpIdentification:
+  input has_xmp_metadata content boolean
+  input pdfaid_part content integer
+  input conformance_letter content PdfaLevel
+  output compliant content boolean
+
+scope XmpIdentification:
+  definition compliant equals has_xmp_metadata and (pdfaid_part = 3)
+```
+
+# --- 6.1.13 Implementation limits (numeric/string/name) ---
+
+```catala
+declaration scope ImplementationLimits:
+  input max_integer content integer
+  input max_string_bytes content integer
+  input max_name_bytes content integer
+  input indirect_objects content integer
+  output compliant content boolean
+
+scope ImplementationLimits:
+  definition compliant equals
+    (max_integer <= 2147483647)
+    and (max_string_bytes <= 32767)
+    and (max_name_bytes <= 127)
+    and (indirect_objects <= 8388607)
+```
+
+# --- Aggregate: a conforming PDF/A-3 file ---
+
+```catala
+declaration scope ConformingFile:
+  input encryption_ok content boolean
+  input fonts_ok content boolean
+  input external_streams_ok content boolean
+  input filters_ok content boolean
+  input actions_ok content boolean
+  input output_intent_ok content boolean
+  input xmp_ok content boolean
+  input limits_ok content boolean
+  output conforms content boolean
+
+scope ConformingFile:
+  definition conforms equals
+    encryption_ok and fonts_ok and external_streams_ok and filters_ok
+    and actions_ok and output_intent_ok and xmp_ok and limits_ok
+```
