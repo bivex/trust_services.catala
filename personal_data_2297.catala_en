@@ -1,0 +1,291 @@
+# Закон України «Про захист персональних даних»
+# Law of Ukraine "On Personal Data Protection"
+# (№ 2297-VI of 01.06.2010, as amended through Law № 4240-IX of 12.02.2025)
+#
+# Encodes COMPUTABLE provisions only:
+#   Art.6    — general processing requirements (purpose, adequacy, retention,
+#              consent on incompatible new purpose)
+#   Art.7    — special-category data: prohibited unless one of 8 exceptions (ч.2)
+#   Art.11   — lawful bases for processing (6 grounds)
+#   Art.12   — notice to data subject (at collection / within 30 working days)
+#   Art.16   — access request handling (study ≤10 wd; fulfil ≤30 cal.days)
+#   Art.17   — deferral/refusal of third-party access (defer ≤30, total ≤45 cal.days)
+#   Art.19   — subject's own-data access is free; third parties may be charged
+#   Art.25   — disapplication (personal/household; journalistic/creative)
+#   Art.29   — cross-border transfer: adequate-protection state OR one of 5 grounds
+#
+# Cross-link: «конфіденційна інформація про особу» (Art.5) is the persona-data
+# facet of the restricted-access regime in Law № 2657-XII Art.21 (information_law_2657)
+# and feeds the гриф обмеження доступу (реквізит 15 ДСТУ 4163:2020). Personal
+# data in e-documents also interacts with Law № 851-IV Art.15 storage/circulation.
+#
+# Non-computable provisions (Ombudsman powers Art.23, control Art.22,
+# financing Art.26, liability Art.28, transitional clauses) are omitted.
+#
+# Convention (matches repo): locale English (.catala_en), prose Ukrainian,
+# identifiers ASCII.
+
+```catala-metadata
+declaration enumeration ProcessingBasis:
+  # Ст.11: підстави для обробки персональних даних.
+  -- Consent                       # 1) згода суб’єкта
+  -- LegalPermissionForPowers      # 2) дозвіл за законом для повноважень володільця
+  -- ContractWithSubject           # 3) укладення/виконання правочину із суб’єктом
+  -- VitalInterests                # 4) захист життєво важливих інтересів
+  -- LegalObligationOfController   # 5) виконання обов’язку володільця за законом
+  -- LegitimateInterests          # 6) законні інтереси (баланс із правами субʼєкта)
+
+declaration enumeration SpecialCategoryException:
+  # Ст.7(2): винятки із заборони обробки особливих категорій (ч.1).
+  -- ExplicitConsent               # 1) однозначна згода суб’єкта
+  -- EmploymentLawObligations      # 2) трудові правовідносини за законом
+  -- VitalInterestsIncapacitated   # 3) життєві інтереси за недієздатності
+  -- NonprofitAssociationMembers   # 4) релігійні/громадські/політ./профспілки — члени
+  -- LegalClaim                    # 5) обґрунтування/захист правової вимоги
+  -- HealthcarePurposes            # 6) охорона здоровʼя (мед. працівником)
+  -- CourtOperativeSecurity        # 7) вироки суду, ОРД, контррозвідка, боротьба з тероризмом
+  -- ManifestlyPublic              # 8) дані, явно оприлюднені субʼєктом
+  -- NoException                   # виняток відсутній
+
+declaration structure GeneralRequirements:
+  # Ст.6: загальні вимоги до обробки.
+  data purpose_defined_in_law content boolean      # ч.1 — мета сформульована в актах
+  data data_adequate_not_excessive content boolean # ч.3 — відповідні, адекватні, ненадмірні
+  data accurate_and_updated content boolean         # ч.2 — точні, достовірні, оновлювані
+  data retained_no_longer_than_needed content boolean  # ч.8 — не довше, ніж потрібно
+
+declaration structure PurposeChange:
+  # Ст.6(1) абз.3: зміна мети на несумісну потребує нової згоди.
+  data purpose_changed content boolean
+  data new_purpose_incompatible content boolean
+  data new_consent_obtained content boolean
+  data law_allows_without_consent content boolean
+
+declaration enumeration TransferGround:
+  # Ст.29(4): підстави передачі за кордон (поза адекватним захистом).
+  -- UnambiguousConsent            # 1) однозначна згода субʼєкта
+  -- ContractInSubjectFavour       # 2) правочин на користь субʼєкта
+  -- VitalInterestsTransfer        # 3) захист життєво важливих інтересів
+  -- PublicInterestLegalClaim      # 4) суспільний інтерес / правова вимога
+  -- ControllerPrivacyGuarantees   # 5) гарантії невтручання в особисте життя
+  -- NoTransferGround
+
+declaration enumeration AccessRequestor:
+  # Ст.16/17/19: хто подає запит на доступ.
+  -- DataSubjectOwnData            # субʼєкт щодо власних даних
+  -- ThirdParty                    # третя особа
+```
+
+## Стаття 6. Загальні вимоги до обробки персональних даних
+
+Мета обробки має бути сформульована в актах (ч.1); дані — відповідні, адекватні
+та ненадмірні (ч.3), точні й оновлювані (ч.2), та зберігатися не довше, ніж
+потрібно (ч.8). За зміни мети на несумісну потрібна нова згода (ч.1 абз.3).
+
+```catala-metadata
+declaration scope GeneralComplianceCheck:
+  input req content GeneralRequirements
+  output processing_compliant content boolean
+```
+
+```catala
+scope GeneralComplianceCheck:
+  definition processing_compliant equals
+    req.purpose_defined_in_law
+    and req.data_adequate_not_excessive
+    and req.accurate_and_updated
+    and req.retained_no_longer_than_needed
+```
+
+```catala-metadata
+declaration scope PurposeChangeCheck:
+  input change content PurposeChange
+  output further_processing_allowed content boolean
+```
+
+```catala
+scope PurposeChangeCheck:
+  # Якщо мету не змінено, або нова мета сумісна — обробка триває.
+  # Якщо нова мета несумісна — потрібна нова згода або дозвіл закону.
+  definition further_processing_allowed equals
+    if (not change.purpose_changed) or (not change.new_purpose_incompatible) then
+      true
+    else
+      change.new_consent_obtained or change.law_allows_without_consent
+```
+
+## Стаття 7. Особливі вимоги до обробки персональних даних
+
+Заборонено обробку особливих категорій (раса, етнічне походження, політичні/
+релігійні/світоглядні переконання, членство в партіях/профспілках, судимість,
+здоровʼя, статеве життя, біометричні/генетичні дані) — ч.1, крім випадків ч.2.
+
+```catala-metadata
+declaration scope SpecialCategoryProcessing:
+  input exception content SpecialCategoryException
+  output processing_permitted content boolean
+```
+
+```catala
+scope SpecialCategoryProcessing:
+  definition processing_permitted equals
+    exception <> SpecialCategoryException.NoException
+```
+
+## Стаття 11. Підстави для обробки персональних даних
+
+Обробка правомірна лише за наявності хоча б однієї з підстав ч.1. Для законних
+інтересів (підстава 6) — лише якщо вони не переважені правами субʼєкта.
+
+```catala-metadata
+declaration scope ProcessingLawfulness:
+  input basis content ProcessingBasis
+  input legitimate_interests_override_subject content boolean  # лише для LegitimateInterests
+  output lawful content boolean
+```
+
+```catala
+scope ProcessingLawfulness:
+  definition lawful equals
+    match basis with pattern
+    -- Consent: true
+    -- LegalPermissionForPowers: true
+    -- ContractWithSubject: true
+    -- VitalInterests: true
+    -- LegalObligationOfController: true
+    -- LegitimateInterests:
+         # ч.1 п.6: крім випадків, коли права субʼєкта переважають інтерес
+         (not legitimate_interests_override_subject)
+```
+
+## Стаття 12. Збирання персональних даних
+
+Субʼєкт повідомляється про володільця, склад/зміст даних, права, мету та
+одержувачів: у момент збору (якщо збираються у субʼєкта) або протягом 30
+робочих днів (в інших випадках).
+
+```catala-metadata
+declaration scope CollectionNotice:
+  input collected_from_subject content boolean
+  input working_days_since_collection content integer
+  output notice_deadline_working_days content integer
+  output notice_timely content boolean
+```
+
+```catala
+scope CollectionNotice:
+  definition notice_deadline_working_days equals
+    if collected_from_subject then 0 else 30
+
+  definition notice_timely equals
+    collected_from_subject or working_days_since_collection <= 30
+```
+
+## Стаття 16. Порядок доступу до персональних даних
+
+Строк вивчення запиту — не більше 10 робочих днів; запит задовольняється
+протягом 30 календарних днів з дня надходження (ч.5).
+
+```catala-metadata
+declaration scope AccessRequestTiming:
+  input study_working_days content integer
+  input fulfilment_calendar_days content integer
+  output study_within_limit content boolean
+  output fulfilment_within_limit content boolean
+```
+
+```catala
+scope AccessRequestTiming:
+  definition study_within_limit equals study_working_days <= 10
+  definition fulfilment_within_limit equals fulfilment_calendar_days <= 30
+```
+
+## Стаття 17. Відстрочення або відмова у доступі
+
+Відстрочення доступу субʼєкта до власних даних НЕ допускається (ч.1). Для
+третіх осіб відстрочення можливе ≤30 кал.днів; загальний строк ≤45 (ч.2).
+
+```catala-metadata
+declaration scope AccessDeferral:
+  input requestor content AccessRequestor
+  input deferral_calendar_days content integer
+  input total_calendar_days content integer
+  output deferral_allowed content boolean
+```
+
+```catala
+scope AccessDeferral:
+  definition deferral_allowed equals
+    match requestor with pattern
+    -- DataSubjectOwnData: false                 # ч.1 — субʼєкту відстрочення заборонено
+    -- ThirdParty:
+         (deferral_calendar_days <= 30 and total_calendar_days <= 45)
+```
+
+## Стаття 19. Оплата доступу
+
+Доступ субʼєкта до даних про себе — безоплатний (ч.1). Інші субʼєкти можуть
+сплачувати за роботу з обробки/консультування (ч.2).
+
+```catala-metadata
+declaration scope AccessChargeability:
+  input requestor content AccessRequestor
+  output access_free content boolean
+```
+
+```catala
+scope AccessChargeability:
+  definition access_free equals
+    match requestor with pattern
+    -- DataSubjectOwnData: true
+    -- ThirdParty: false
+```
+
+## Стаття 25. Обмеження дії цього Закону
+
+Дозволяється обробка без застосування положень Закону, якщо вона здійснюється
+фізособою для особистих/побутових потреб, або виключно для журналістських та
+творчих цілей за балансу прав (ч.2).
+
+```catala-metadata
+declaration enumeration ProcessingContext:
+  -- PersonalHousehold             # ч.2 п.1 — особисті/побутові потреби
+  -- JournalisticCreative          # ч.2 п.2 — журналістські/творчі цілі (за балансу)
+  -- General                       # звичайна обробка
+
+declaration scope LawApplicability:
+  input context content ProcessingContext
+  input balance_of_rights_ensured content boolean  # лише для JournalisticCreative
+  output law_applies content boolean
+```
+
+```catala
+scope LawApplicability:
+  definition law_applies equals
+    match context with pattern
+    -- PersonalHousehold: false
+    -- JournalisticCreative:
+         # звільнення діє лише за забезпечення балансу прав; інакше Закон діє
+         (not balance_of_rights_ensured)
+    -- General: true
+```
+
+## Стаття 29. Міжнародне співробітництво та передача персональних даних
+
+Передача за кордон допускається за умови належного захисту відповідною державою
+(ч.3) АБО за наявності однієї з підстав ч.4. Дані не можуть поширюватися з іншою
+метою, ніж та, з якою зібрані.
+
+```catala-metadata
+declaration scope CrossBorderTransfer:
+  input adequate_protection_state content boolean   # ч.3 — належний рівень захисту
+  input ground content TransferGround               # ч.4 — підстава за відсутності адекватності
+  output transfer_permitted content boolean
+```
+
+```catala
+scope CrossBorderTransfer:
+  definition transfer_permitted equals
+    adequate_protection_state
+    or (ground <> TransferGround.NoTransferGround)
+```
