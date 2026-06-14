@@ -1,0 +1,218 @@
+# Закон України «Про доступ до публічної інформації»
+# Law of Ukraine "On Access to Public Information"
+# (№ 2939-VI of 13.01.2011, as amended through Law № 4321-IX of 25.03.2025)
+#
+# Encodes COMPUTABLE provisions only:
+#   Art.1    — public info is open except where law provides otherwise
+#   Art.6    — restricted-access kinds (confidential/secret/official);
+#              three-part harm test (ч.2); info that may NOT be restricted (ч.5-7)
+#   Art.15   — proactive publication timing (≤5 wd; draft acts ≥10 wd before review)
+#   Art.20   — request response timing (5 wd; 48 h for life/safety/environment;
+#              extension to 20 wd for large volume)
+#   Art.21   — payment: free; >10 pages → actual copying cost; own data /
+#              public-interest info → free
+#   Art.22   — refusal grounds (4 exhaustive grounds)
+#
+# Cross-link: Art.6 three-part test is the canonical form of the restriction test
+# referenced by Law № 2657-XII Art.21 (information_law_2657) and the гриф
+# обмеження доступу / «для службового користування» (Art.9 ↔ реквізит 15
+# ДСТУ 4163:2020). Personal-data access dovetails with Law № 2297-VI.
+#
+# Non-computable provisions (principles Art.4, controllers Art.13, duties Art.14,
+# appeals Art.23, liability Art.24, transitional clauses) are omitted.
+#
+# Convention (matches repo): locale English (.catala_en), prose Ukrainian,
+# identifiers ASCII.
+
+```catala-metadata
+declaration enumeration AccessRegime:
+  # Ст.1(2): публічна інформація відкрита, крім випадків, встановлених законом.
+  -- Open
+  -- Restricted
+
+declaration enumeration RestrictedKind:
+  # Ст.6(1): види інформації з обмеженим доступом.
+  -- Confidential                  # ст.7 — конфіденційна
+  -- Secret                        # ст.8 — таємна
+  -- Official                      # ст.9 — службова
+  -- NotRestricted
+
+declaration enumeration NonRestrictableTopic:
+  # Ст.6(5,6,7): відомості, доступ до яких НЕ може бути обмежено.
+  -- BudgetUseProcurement          # ч.5 — бюджет, закупівлі, держ/комун. майно
+  -- TaxDebt                       # ч.5 — податковий борг фізосіб
+  -- OfficialDeclaration           # ч.6 — декларації за ЗУ «Про запобігання корупції»
+  -- PublicOfficialRemuneration    # ч.7 — оплата праці керівників держ/комун. осіб
+  -- OtherTopic                    # інші теми (можуть обмежуватися за тестом ч.2)
+
+declaration structure ThreePartTest:
+  # Ст.6(2): сукупність вимог для правомірного обмеження доступу.
+  data legitimate_interest content boolean   # п.1 — нацбезпека/порядок/права тощо
+  data substantial_harm content boolean       # п.2 — істотна шкода цим інтересам
+  data harm_outweighs_public_interest content boolean  # п.3 — шкода > суспільний інтерес
+
+declaration enumeration RequestUrgency:
+  # Ст.20: характер запиту, що визначає строк відповіді.
+  -- LifeSafetyEnvironment         # життя/свобода/довкілля/НС — 48 годин
+  -- Ordinary                      # звичайний — 5 робочих днів
+
+declaration enumeration Requestor:
+  # Ст.21: хто отримує інформацію (для визначення плати).
+  -- OwnDataOrPublicInterest       # про себе або суспільно необхідна — безоплатно
+  -- General                       # звичайний запитувач
+
+declaration enumeration RefusalGround:
+  # Ст.22(1): вичерпні підстави відмови у задоволенні запиту.
+  -- NotHeldNotObliged             # 1) не володіє і не зобовʼязаний володіти
+  -- RestrictedInformation         # 2) інформація з обмеженим доступом (ч.2 ст.6)
+  -- CopyingCostNotPaid            # 3) не оплачено копіювання/друк (ст.21)
+  -- RequestRequirementsNotMet     # 4) не дотримано вимог до запиту (ч.5 ст.19)
+  -- NoGround                      # підстав для відмови немає
+```
+
+## Розділ I. Загальні положення
+
+### Стаття 1. Публічна інформація
+
+Публічна інформація є відкритою, крім випадків, встановлених законом (ч.2 ст.1).
+
+```catala-metadata
+declaration scope PublicInfoRegime:
+  input restricted_by_law content boolean
+  output regime content AccessRegime
+```
+
+```catala
+scope PublicInfoRegime:
+  definition regime equals
+    if restricted_by_law then AccessRegime.Restricted else AccessRegime.Open
+```
+
+## Розділ II. Порядок доступу до інформації
+
+### Стаття 6. Публічна інформація з обмеженим доступом
+
+Обмеження доступу здійснюється при дотриманні СУКУПНОСТІ трьох вимог (ч.2):
+легітимний інтерес; розголошення завдасть істотної шкоди; шкода переважає
+суспільний інтерес. Окремо — перелік відомостей, доступ до яких обмежити не
+можна (ч.5-7).
+
+```catala-metadata
+declaration scope RestrictionLawfulness:
+  input topic content NonRestrictableTopic
+  input test content ThreePartTest
+  output topic_may_be_restricted content boolean
+  output restriction_lawful content boolean
+```
+
+```catala
+scope RestrictionLawfulness:
+  # ч.5-7: перелічені теми не підлягають обмеженню за жодних умов.
+  definition topic_may_be_restricted equals
+    match topic with pattern
+    -- BudgetUseProcurement: false
+    -- TaxDebt: false
+    -- OfficialDeclaration: false
+    -- PublicOfficialRemuneration: false
+    -- OtherTopic: true
+
+  # ч.2: правомірне обмеження = тема дозволяє І витримано трискладовий тест.
+  definition restriction_lawful equals
+    topic_may_be_restricted
+    and test.legitimate_interest
+    and test.substantial_harm
+    and test.harm_outweighs_public_interest
+```
+
+### Стаття 15. Оприлюднення інформації розпорядниками
+
+Інформація підлягає оприлюдненню не пізніше 5 робочих днів з дня затвердження
+документа (ч.2). Проекти нормативно-правових актів — не пізніш як за 10 робочих
+днів до дати розгляду (ч.4).
+
+```catala-metadata
+declaration scope PublicationTiming:
+  input is_draft_act content boolean
+  input working_days_since_approval content integer  # для затверджених документів
+  input working_days_before_review content integer    # для проектів актів
+  output publication_timely content boolean
+```
+
+```catala
+scope PublicationTiming:
+  definition publication_timely equals
+    if is_draft_act then
+      # проект має бути оприлюднений завчасно: не менш як за 10 робочих днів
+      working_days_before_review >= 10
+    else
+      # затверджений документ: не пізніше 5 робочих днів після затвердження
+      working_days_since_approval <= 5
+```
+
+## Розділ IV. Реалізація права на доступ за запитом
+
+### Стаття 20. Строк розгляду запитів на інформацію
+
+Відповідь надається не пізніше 5 робочих днів (ч.1); для запитів щодо життя/
+свободи/довкілля/НС — не пізніше 48 годин (ч.2); за великого обсягу строк може
+бути продовжений до 20 робочих днів (ч.4).
+
+```catala-metadata
+declaration scope RequestResponseTiming:
+  input urgency content RequestUrgency
+  input extended_for_volume content boolean
+  output deadline_hours content integer        # для термінових (48 год)
+  output deadline_working_days content integer # для звичайних (5 або 20 робочих днів)
+```
+
+```catala
+scope RequestResponseTiming:
+  definition deadline_hours equals
+    match urgency with pattern
+    -- LifeSafetyEnvironment: 48
+    -- Ordinary: 0   # вимірюється у робочих днях, не годинах
+
+  definition deadline_working_days equals
+    match urgency with pattern
+    -- LifeSafetyEnvironment: 0   # вимірюється у годинах
+    -- Ordinary: (if extended_for_volume then 20 else 5)
+```
+
+### Стаття 21. Плата за надання інформації
+
+Інформація на запит надається безкоштовно (ч.1). За копіювання понад 10 сторінок
+запитувач відшкодовує фактичні витрати (ч.2). Інформація про себе та суспільно
+необхідна — без плати за копіювання (ч.4).
+
+```catala-metadata
+declaration scope AccessPayment:
+  input requestor content Requestor
+  input pages content integer
+  output reimbursement_required content boolean
+```
+
+```catala
+scope AccessPayment:
+  definition reimbursement_required equals
+    match requestor with pattern
+    -- OwnDataOrPublicInterest: false   # ч.4 — без плати за копіювання/друк
+    -- General: (pages > 10)            # ч.1-2 — безкоштовно до 10 сторінок
+```
+
+### Стаття 22. Відмова в задоволенні запиту на інформацію
+
+Розпорядник має право відмовити лише з однієї з чотирьох підстав ч.1; відповідь,
+що інформацію можна отримати із загальнодоступних джерел, або не по суті —
+неправомірна відмова (ч.2).
+
+```catala-metadata
+declaration scope RefusalLawfulness:
+  input ground content RefusalGround
+  output refusal_lawful content boolean
+```
+
+```catala
+scope RefusalLawfulness:
+  definition refusal_lawful equals
+    ground <> RefusalGround.NoGround
+```
