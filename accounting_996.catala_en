@@ -1,0 +1,260 @@
+# Закон України «Про бухгалтерський облік та фінансову звітність в Україні»
+# Law of Ukraine "On Accounting and Financial Reporting in Ukraine"
+# (№ 996-XIV of 16.07.1999, as amended through Law № 4791-IX of 24.02.2026)
+#
+# Encodes COMPUTABLE provisions only:
+#   Art.2    — enterprise size category by 2-of-3 thresholds (micro/small/
+#              medium/large), in EUR
+#   Art.8(3) — retention of primary docs/registers/reporting >= 3 years
+#   Art.9(2) — mandatory requisites of a primary accounting document
+#   Art.11(3)/12-1(2) — who MUST report under IFRS; reduced reporting for
+#              micro/small
+#   Art.12   — group size category by 2-of-3 thresholds (small/medium/large)
+#   Art.13   — reporting period (calendar year; first period 12..15 months)
+#   Art.14   — publication deadlines (30 Apr / 1 Jun) and >= 6-year web retention
+#
+# Cross-link: Art.9(2) mandatory requisites of a primary document parallel the
+# §4.4 ДСТУ 4163:2020 requisites enforced by MandatoryRequisitesRule; electronic
+# primary documents require a signature per Law № 851-IV (electronic_documents);
+# financial statements are NOT restricted-access info (Art.14(2)) — ties to
+# Laws № 2657-XII / № 2939-VI.
+#
+# Non-computable provisions (definitions Art.1, purpose Art.3, principles Art.4,
+# currency Art.5, state regulation Art.6, org of accounting Art.8(1,2,4-9),
+# inventory Art.10, control Art.15, transitional) are omitted.
+#
+# Convention (matches repo): locale English (.catala_en), prose Ukrainian,
+# identifiers ASCII.
+
+```catala-metadata
+declaration enumeration EnterpriseSize:
+  # Ст.2(2): категорія підприємства.
+  -- Micro
+  -- Small
+  -- Medium
+  -- Large
+
+declaration structure SizeMetrics:
+  # Ст.2(2): показники річної фінзвітності (у євро / особах).
+  data balance_assets_eur content decimal       # балансова вартість активів
+  data net_revenue_eur content decimal           # чистий дохід від реалізації
+  data avg_employees content integer             # середня кількість працівників
+
+declaration enumeration GroupSize:
+  # Ст.12(1): категорія групи.
+  -- SmallGroup
+  -- MediumGroup
+  -- LargeGroup
+
+declaration structure PrimaryDocRequisites:
+  # Ст.9(2): обовʼязкові реквізити первинного документа.
+  data has_title content boolean                 # назва документа (форми)
+  data has_date content boolean                  # дата складання
+  data has_enterprise_name content boolean       # назва підприємства
+  data has_operation_content content boolean     # зміст та обсяг госп. операції
+  data has_responsible_persons content boolean   # посади і прізвища відповідальних
+  data has_signature content boolean             # особистий підпис / ідентифікація
+
+declaration enumeration ReportingFramework:
+  -- IFRS                                          # міжнародні стандарти
+  -- NationalStandards                             # національні П(С)БО
+
+declaration structure IfrsObligation:
+  # Ст.12-1(2): хто зобовʼязаний звітувати за МСФЗ.
+  data public_interest_entity content boolean      # підприємство, що становить суспільний інтерес
+  data public_joint_stock content boolean          # публічне акціонерне товариство
+  data extractive_industry content boolean         # видобувні галузі
+  data large_group_parent content boolean          # материнське підприємство великої групи
+  data government_listed_activity content boolean   # вид діяльності з переліку КМУ
+```
+
+## Розділ I. Загальні положення
+
+### Стаття 2. Сфера дії Закону — категорії підприємств
+
+Підприємство належить до категорії, якщо відповідає щонайменше ДВОМ із трьох
+критеріїв. Пороги (включно): мікро 350k/700k/10; мале 4M/8M/50; середнє
+20M/40M/250; велике — понад пороги середнього (ч.2).
+
+```catala-metadata
+declaration scope EnterpriseClassification:
+  input metrics content SizeMetrics
+  output size content EnterpriseSize
+```
+
+```catala
+scope EnterpriseClassification:
+  # Рахуємо, скільком порогам мікро/малого/середнього відповідають показники
+  # (щонайменше два — належність до категорії). Йдемо від найменшої категорії.
+  definition size equals
+    # --- мікро: ≤350k активів, ≤700k доходу, ≤10 осіб ---
+    (if (
+        (if metrics.balance_assets_eur <= 350000.0 then 1 else 0)
+        + (if metrics.net_revenue_eur <= 700000.0 then 1 else 0)
+        + (if metrics.avg_employees <= 10 then 1 else 0)
+      ) >= 2
+     then EnterpriseSize.Micro
+     # --- мале: ≤4M, ≤8M, ≤50 ---
+     else if (
+        (if metrics.balance_assets_eur <= 4000000.0 then 1 else 0)
+        + (if metrics.net_revenue_eur <= 8000000.0 then 1 else 0)
+        + (if metrics.avg_employees <= 50 then 1 else 0)
+      ) >= 2
+     then EnterpriseSize.Small
+     # --- середнє: ≤20M, ≤40M, ≤250 ---
+     else if (
+        (if metrics.balance_assets_eur <= 20000000.0 then 1 else 0)
+        + (if metrics.net_revenue_eur <= 40000000.0 then 1 else 0)
+        + (if metrics.avg_employees <= 250 then 1 else 0)
+      ) >= 2
+     then EnterpriseSize.Medium
+     # --- інакше велике ---
+     else EnterpriseSize.Large)
+```
+
+## Розділ III. Організація та ведення бухгалтерського обліку
+
+### Стаття 8(3). Строк зберігання
+
+Збереження оброблених документів, регістрів і звітності — протягом
+встановленого терміну, але **не менше трьох років** (ч.3 ст.8).
+
+```catala-metadata
+declaration scope RetentionCheck:
+  input retention_years content integer
+  output retention_sufficient content boolean
+```
+
+```catala
+scope RetentionCheck:
+  definition retention_sufficient equals retention_years >= 3
+```
+
+### Стаття 9(2). Обовʼязкові реквізити первинного документа
+
+Первинний документ повинен мати всі обовʼязкові реквізити (ч.2). Паралель до
+§4.4 ДСТУ 4163:2020.
+
+```catala-metadata
+declaration scope PrimaryDocValidity:
+  input req content PrimaryDocRequisites
+  output valid content boolean
+```
+
+```catala
+scope PrimaryDocValidity:
+  definition valid equals
+    req.has_title
+    and req.has_date
+    and req.has_enterprise_name
+    and req.has_operation_content
+    and req.has_responsible_persons
+    and req.has_signature
+```
+
+## Розділ IV. Фінансова звітність
+
+### Стаття 12. Консолідована звітність — категорії груп
+
+Група належить до категорії за 2-з-3 критеріїв: мала 4M/8M/50; середня
+20M/40M/250; велика — понад (ч.1).
+
+```catala-metadata
+declaration scope GroupClassification:
+  input metrics content SizeMetrics
+  output size content GroupSize
+```
+
+```catala
+scope GroupClassification:
+  definition size equals
+    (if (
+        (if metrics.balance_assets_eur <= 4000000.0 then 1 else 0)
+        + (if metrics.net_revenue_eur <= 8000000.0 then 1 else 0)
+        + (if metrics.avg_employees <= 50 then 1 else 0)
+      ) >= 2
+     then GroupSize.SmallGroup
+     else if (
+        (if metrics.balance_assets_eur <= 20000000.0 then 1 else 0)
+        + (if metrics.net_revenue_eur <= 40000000.0 then 1 else 0)
+        + (if metrics.avg_employees <= 250 then 1 else 0)
+      ) >= 2
+     then GroupSize.MediumGroup
+     else GroupSize.LargeGroup)
+```
+
+### Стаття 12-1. Застосування міжнародних стандартів
+
+Перелічені у ч.2 підприємства зобовʼязані звітувати за МСФЗ; інші — визначають
+доцільність самостійно (ч.3).
+
+```catala-metadata
+declaration scope IfrsApplicability:
+  input obligation content IfrsObligation
+  output ifrs_mandatory content boolean
+```
+
+```catala
+scope IfrsApplicability:
+  definition ifrs_mandatory equals
+    obligation.public_interest_entity
+    or obligation.public_joint_stock
+    or obligation.extractive_industry
+    or obligation.large_group_parent
+    or obligation.government_listed_activity
+```
+
+### Стаття 13. Звітний період
+
+Звітний період — календарний рік (ч.1). Перший період новоствореного
+підприємства: не менш як 12 і не більш як 15 місяців (ч.2).
+
+```catala-metadata
+declaration scope ReportingPeriod:
+  input is_newly_created content boolean
+  input period_months content integer
+  output period_valid content boolean
+```
+
+```catala
+scope ReportingPeriod:
+  definition period_valid equals
+    if is_newly_created then
+      period_months >= 12 and period_months <= 15
+    else
+      period_months = 12
+```
+
+### Стаття 14. Подання та оприлюднення фінансової звітності
+
+ПСІ (крім великих не-емітентів), ПАТ, природні монополії, видобувні —
+оприлюднюють до 30 квітня; великі не-емітенти та середні — до 1 червня (ч.3).
+Оприлюднена звітність зберігається на вебсайті не менше 6 років (ч.7).
+
+```catala-metadata
+declaration enumeration PublisherKind:
+  -- PublicInterestNonLargeIssuer   # ПСІ (крім великих не-емітентів) / ПАТ / монополії / видобувні
+  -- LargeNonIssuerOrMedium         # великі не-емітенти та середні підприємства
+
+declaration scope PublicationTiming:
+  input publisher content PublisherKind
+  input publication_day_of_year content integer  # 1..366; 30 Apr=120, 1 Jun=152
+  input web_retention_years content integer
+  output deadline_day_of_year content integer
+  output published_in_time content boolean
+  output web_retention_sufficient content boolean
+```
+
+```catala
+scope PublicationTiming:
+  # 30 квітня = 120-й день; 1 червня = 152-й день (невисокосний рік, орієнтовно).
+  definition deadline_day_of_year equals
+    match publisher with pattern
+    -- PublicInterestNonLargeIssuer: 120
+    -- LargeNonIssuerOrMedium: 152
+
+  definition published_in_time equals
+    publication_day_of_year <= deadline_day_of_year
+
+  definition web_retention_sufficient equals web_retention_years >= 6
+```
