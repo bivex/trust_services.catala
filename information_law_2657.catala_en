@@ -1,0 +1,195 @@
+# Закон України «Про інформацію»
+# Law of Ukraine "On Information"
+# (№ 2657-XII of 02.10.1992, as amended through Law № 2718-IX of 03.11.2022)
+#
+# Encodes COMPUTABLE provisions only:
+#   Art.10   — types of information by content (closed list + «other»)
+#   Art.20   — access regime: open by default; restricted only if law so provides
+#   Art.21   — restricted-access kinds (confidential/secret/official);
+#              exhaustive list of info that may NOT be restricted (ч.4);
+#              three-part harm test for restriction (ч.2 ст.6 ↔ public-interest override)
+#   Art.29   — socially necessary information: public-interest override of restriction
+#   Art.30   — value judgments bear no liability; only factual statements are refutable
+#
+# Cross-link: feeds the e-document confidentiality regime referenced by
+# Law № 851-IV Art.15 (обіг документів з інформацією з обмеженим доступом) and
+# by ДСТУ 4163:2020 §… (гриф обмеження доступу, реквізит 15) — see
+# electronic_documents_851.catala_en and the LeftIndents.restriction_mm requisite.
+#
+# Non-computable provisions (state policy Art.3, principles Art.2, journalist
+# accreditation Art.26, damages Art.31, transitional clauses) are omitted.
+#
+# Convention (matches repo): locale English (.catala_en), prose Ukrainian,
+# identifiers ASCII.
+
+```catala-metadata
+declaration enumeration InfoContentType:
+  # Ст.10: види інформації за змістом (перелік + інші види).
+  -- PersonalData                  # інформація про фізичну особу (ст.11)
+  -- ReferenceEncyclopedic         # довідково-енциклопедичного характеру (ст.12)
+  -- Environmental                 # про стан довкілля / екологічна (ст.13)
+  -- ProductInfo                   # про товар (роботу, послугу) (ст.14)
+  -- ScientificTechnical           # науково-технічна (ст.15)
+  -- Tax                           # податкова (ст.16)
+  -- Legal                         # правова (ст.17)
+  -- Statistical                   # статистична (ст.18)
+  -- Sociological                  # соціологічна (ст.19)
+  -- CriticalTechnological         # критична технологічна (ст.10, доп. 2021)
+  -- OtherContent                  # інші види
+
+declaration enumeration AccessRegime:
+  # Ст.20: за порядком доступу.
+  -- Open                          # відкрита
+  -- Restricted                    # з обмеженим доступом
+
+declaration enumeration RestrictedKind:
+  # Ст.21(1): види інформації з обмеженим доступом.
+  -- Confidential                  # конфіденційна (ч.2)
+  -- Secret                        # таємна (ч.3)
+  -- Official                      # службова (ч.3)
+  -- NotRestricted                 # не належить до обмеженого доступу
+
+declaration enumeration UndisclosableTopic:
+  # Ст.21(4): відомості, що НЕ можуть бути віднесені до обмеженого доступу.
+  -- EnvironmentFoodQuality        # 1) стан довкілля, якість продуктів і предметів побуту
+  -- EmergenciesDisasters          # 2) аварії, катастрофи, небезпечні явища, НС
+  -- PublicHealthLiving            # 3) стан здоровʼя, життєвий рівень, правопорядок, освіта
+  -- HumanRightsViolations         # 4) факти порушення прав і свобод людини
+  -- OtherTopic                    # інші теми (можуть обмежуватися за законом)
+
+declaration structure RestrictionTest:
+  # Ст.6(2) ↔ ст.21(2): трискладовий тест правомірності обмеження доступу.
+  data restriction_provided_by_law content boolean      # обмежено в інтересах, визначених законом
+  data legitimate_aim content boolean                    # заради легітимної мети
+  data harm_outweighs_public_interest content boolean    # шкода переважає суспільний інтерес
+
+declaration structure PublicInterestTest:
+  # Ст.29: суспільно необхідна інформація.
+  data is_subject_of_public_interest content boolean     # предмет суспільного інтересу
+  data public_right_to_know_outweighs_harm content boolean
+
+declaration enumeration StatementKind:
+  # Ст.30: характер висловлювання.
+  -- ValueJudgment                 # оціночне судження
+  -- Defamation                    # наклеп (виняток із ч.2)
+  -- FactualStatement              # фактичні дані
+```
+
+## Розділ II. Інформація
+
+### Стаття 10. Види інформації за змістом
+
+За змістом інформація поділяється на визначені види (ст.10). Перелік не є
+вичерпним — допускаються інші види.
+
+```catala-metadata
+declaration scope ContentTypeClassification:
+  input content_type content InfoContentType
+  output is_recognized_type content boolean
+```
+
+```catala
+scope ContentTypeClassification:
+  # Будь-який елемент переліку (включно з «інші види») є визнаним видом.
+  definition is_recognized_type equals true
+```
+
+### Стаття 20. Доступ до інформації
+
+За порядком доступу інформація поділяється на відкриту та з обмеженим доступом
+(ч.1 ст.20). **Будь-яка інформація є відкритою**, крім віднесеної законом до
+інформації з обмеженим доступом (ч.2 ст.20).
+
+```catala-metadata
+declaration scope AccessClassification:
+  input restricted_by_law content boolean
+  output regime content AccessRegime
+```
+
+```catala
+scope AccessClassification:
+  definition regime equals
+    if restricted_by_law then AccessRegime.Restricted else AccessRegime.Open
+```
+
+### Стаття 21. Інформація з обмеженим доступом
+
+Інформацією з обмеженим доступом є конфіденційна, таємна та службова (ч.1 ст.21).
+До обмеженого доступу **не можуть** бути віднесені відомості з вичерпного
+переліку ч.4 (довкілля, НС, стан здоровʼя/правопорядку, порушення прав людини).
+
+```catala-metadata
+declaration scope RestrictionAdmissibility:
+  input topic content UndisclosableTopic
+  input test content RestrictionTest
+  output topic_may_be_restricted content boolean
+  output restriction_lawful content boolean
+```
+
+```catala
+scope RestrictionAdmissibility:
+  # ч.4: перелічені теми не підлягають обмеженню за жодних умов.
+  definition topic_may_be_restricted equals
+    match topic with pattern
+    -- EnvironmentFoodQuality: false
+    -- EmergenciesDisasters: false
+    -- PublicHealthLiving: false
+    -- HumanRightsViolations: false
+    -- OtherTopic: true
+
+  # Правомірне обмеження = тема дозволяє + витримано трискладовий тест (ст.6(2)).
+  definition restriction_lawful equals
+    topic_may_be_restricted
+    and test.restriction_provided_by_law
+    and test.legitimate_aim
+    and test.harm_outweighs_public_interest
+```
+
+## Розділ IV. Відповідальність
+
+### Стаття 29. Поширення суспільно необхідної інформації
+
+Інформація з обмеженим доступом може бути поширена, якщо вона **суспільно
+необхідна**: є предметом суспільного інтересу і право громадськості знати
+переважає потенційну шкоду від поширення (ч.1 ст.29).
+
+```catala-metadata
+declaration scope SociallyNecessaryDisclosure:
+  input test content PublicInterestTest
+  output disclosure_permitted content boolean
+```
+
+```catala
+scope SociallyNecessaryDisclosure:
+  definition disclosure_permitted equals
+    test.is_subject_of_public_interest
+    and test.public_right_to_know_outweighs_harm
+```
+
+### Стаття 30. Звільнення від відповідальності
+
+Ніхто не може бути притягнутий до відповідальності за висловлення **оціночних
+суджень** (ч.1 ст.30). Оціночні судження не підлягають спростуванню та доведенню
+правдивості; виняток — наклеп (ч.2 ст.30).
+
+```catala-metadata
+declaration scope LiabilityForStatement:
+  input statement content StatementKind
+  output liable content boolean
+  output subject_to_refutation content boolean
+```
+
+```catala
+scope LiabilityForStatement:
+  definition liable equals
+    match statement with pattern
+    -- ValueJudgment: false      # ч.1 — без відповідальності
+    -- Defamation: true          # виняток ч.2
+    -- FactualStatement: true    # фактичні дані підлягають доведенню
+
+  definition subject_to_refutation equals
+    match statement with pattern
+    -- ValueJudgment: false      # не підлягають спростуванню
+    -- Defamation: true
+    -- FactualStatement: true
+```
