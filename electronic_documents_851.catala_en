@@ -1,0 +1,240 @@
+# Закон України «Про електронні документи та електронний документообіг»
+# Law of Ukraine "On Electronic Documents and Electronic Document Circulation"
+# (№ 851-IV of 22.05.2003, as amended through Law № 2801-IX of 01.12.2022)
+#
+# Encodes COMPUTABLE provisions only:
+#   Art.1    — core concepts (mandatory requisite; subjects of e-doc circulation)
+#   Art.5    — electronic document = data incl. mandatory requisites; visual form
+#   Art.6    — signing/sealing completes creation; multi-signer → last signer completes
+#   Art.7    — original: mandatory requisites + author signature; paper+e-copies equal
+#   Art.8    — documents that may NOT be used as e-original (exhaustive list + exception)
+#   Art.11   — receipt: confirmed → received; no confirmation → NOT received
+#   Art.12   — integrity verification: advanced/qualified signature or other means
+#   Art.13   — storage term ≥ paper term; storage admissibility conditions
+#
+# Cross-link: feeds the КЕП-mark (§4.4(22) ДСТУ 4163:2020). Validity of the
+# underlying qualified certificate is governed by Law № 2155-VIII Art.24/25
+# (see trust_services.catala_en) — referenced here, not re-encoded.
+#
+# Non-computable provisions (state policy Art.4, dispute settlement Art.17,
+# liability Art.18, archival procedure, transitional clauses) are omitted.
+#
+# Convention (matches repo): locale English (.catala_en), prose Ukrainian,
+# identifiers ASCII.
+
+```catala-metadata
+declaration enumeration SubjectRole:
+  # Art.1: суб’єкти електронного документообігу.
+  -- Author                  # автор — створив електронний документ
+  -- Signatory               # підписувач
+  -- SealCreator             # створювач електронної печатки
+  -- Addressee               # адресат
+  -- Intermediary            # посередник
+
+declaration enumeration SignatureKind:
+  # Art.12: вид підпису/печатки, що визначає спосіб перевірки цілісності.
+  -- Qualified               # кваліфікований
+  -- Advanced                # удосконалений
+  -- OtherKind               # інший вид
+
+declaration enumeration OriginalUse:
+  # Art.8(3): чи може електронний документ застосовуватися як оригінал.
+  -- Permitted
+  -- Forbidden
+
+declaration structure ElectronicDocument:
+  # Art.5/Art.7: склад, що визначає чинність як документа та як оригіналу.
+  data has_mandatory_requisites content boolean   # Art.5 / Art.1 обов’язк. реквізит
+  data has_author_signature content boolean        # Art.7 — підпис автора
+  data integrity_provable content boolean          # Art.7 — довести цілісність/справжність
+
+declaration structure CreationState:
+  # Art.6: накладання підпису/печатки завершує створення.
+  data signatures_applied content integer          # накладено підписів
+  data seals_applied content integer               # накладено печаток
+  data required_signers content integer            # за технологією створення
+
+declaration structure ReceiptState:
+  # Art.11: підтвердження факту одержання.
+  data confirmation_received_by_author content boolean
+
+declaration structure StorageState:
+  # Art.13: умови припустимого зберігання.
+  data e_storage_term_days content integer         # строк зберігання е-документа
+  data paper_term_days content integer             # строк для паперового відповідника
+  data information_accessible content boolean       # ч.4 п.1
+  data format_restorable content boolean            # ч.4 п.2
+  data origin_metadata_kept content boolean         # ч.4 п.3 (за наявності)
+```
+
+## Розділ II. Електронний документ
+
+### Стаття 5. Електронний документ
+
+Електронний документ — документ, інформація в якому зафіксована у вигляді
+електронних даних, **включаючи обов’язкові реквізити документа** (ч.1 ст.5).
+Без обов’язкових реквізитів документ не може бути підставою для обліку і не
+матиме юридичної сили (ст.1, означення обов’язкового реквізиту).
+
+```catala-metadata
+declaration scope DocumentValidity:
+  input document content ElectronicDocument
+  output has_legal_force content boolean
+```
+
+```catala
+scope DocumentValidity:
+  definition has_legal_force equals
+    document.has_mandatory_requisites
+```
+
+### Стаття 6. Завершення створення електронного документа
+
+Накладанням електронного підпису та/або електронної печатки завершується
+створення електронного документа (ч.3 ст.6). За наявності кількох підписів/
+печаток створення завершується накладанням підпису або печатки **останнім**
+підписувачем чи створювачем печатки відповідно до технології (ч.4 ст.6).
+
+```catala-metadata
+declaration scope DocumentCreation:
+  input state content CreationState
+  output creation_completed content boolean
+```
+
+```catala
+scope DocumentCreation:
+  # Завершено, коли накладено всі необхідні підписи (≥ required_signers) або,
+  # за відсутності вимоги щодо кількості, хоча б один підпис/печатку.
+  definition creation_completed equals
+    if state.required_signers > 0 then
+      state.signatures_applied >= state.required_signers
+    else
+      state.signatures_applied + state.seals_applied >= 1
+```
+
+### Стаття 7. Оригінал електронного документа
+
+Оригіналом є електронний примірник з обов’язковими реквізитами, у тому числі
+з електронним підписом автора (ч.1 ст.7), що **дає змогу довести його цілісність
+та справжність** (ч.4 ст.7). Якщо створено ідентичні за інформацією та
+реквізитами електронний і паперовий документи, кожен є оригіналом і має
+однакову юридичну силу (ч.3 ст.7).
+
+```catala-metadata
+declaration scope OriginalStatus:
+  input document content ElectronicDocument
+  output is_original content boolean
+```
+
+```catala
+scope OriginalStatus:
+  definition is_original equals
+    document.has_mandatory_requisites
+    and document.has_author_signature
+    and document.integrity_provable
+```
+
+### Стаття 8. Документи, які не можуть бути оригіналом в електронній формі
+
+Електронний документ не може застосовуватися як оригінал: свідоцтва про право
+на спадщину; документа, що за законом створюється лише в одному примірнику
+(крім існування централізованого сховища оригіналів); в інших випадках,
+передбачених законом (ч.3 ст.8).
+
+```catala-metadata
+declaration enumeration DocumentClass:
+  -- InheritanceCertificate        # п.1 — свідоцтво про право на спадщину
+  -- SingleOriginalOnly            # п.2 — лише один оригінальний примірник
+  -- OtherLawForbidden             # п.3 — інші випадки, передбачені законом
+  -- Ordinary                      # звичайний документ
+
+declaration scope ElectronicOriginalAdmissibility:
+  input document_class content DocumentClass
+  input centralized_repository_exists content boolean  # виняток для п.2
+  output e_original content OriginalUse
+```
+
+```catala
+scope ElectronicOriginalAdmissibility:
+  definition e_original equals
+    match document_class with pattern
+    -- InheritanceCertificate: OriginalUse.Forbidden
+    -- SingleOriginalOnly:
+         (if centralized_repository_exists then
+            OriginalUse.Permitted
+          else OriginalUse.Forbidden)
+    -- OtherLawForbidden: OriginalUse.Forbidden
+    -- Ordinary: OriginalUse.Permitted
+```
+
+## Розділ III. Засади електронного документообігу
+
+### Стаття 11. Одержання електронних документів
+
+Електронний документ вважається одержаним з часу надходження авторові
+повідомлення про одержання (ч.1 ст.11). У разі ненадходження до автора
+підтвердження факту одержання вважається, що документ **не одержано**
+адресатом (ч.3 ст.11).
+
+```catala-metadata
+declaration scope DocumentReceipt:
+  input state content ReceiptState
+  output considered_received content boolean
+```
+
+```catala
+scope DocumentReceipt:
+  definition considered_received equals
+    state.confirmation_received_by_author
+```
+
+### Стаття 12. Перевірка цілісності електронного документа
+
+Перевірка цілісності проводиться підтвердженням удосконаленого або
+кваліфікованого підпису/печатки; для підпису іншого виду — застосуванням інших
+засобів і методів захисту інформації з дотриманням вимог законодавства (ст.12).
+
+```catala-metadata
+declaration scope IntegrityCheck:
+  input signature_kind content SignatureKind
+  input other_protection_means_applied content boolean
+  output integrity_verifiable content boolean
+```
+
+```catala
+scope IntegrityCheck:
+  definition integrity_verifiable equals
+    match signature_kind with pattern
+    -- Qualified: true
+    -- Advanced: true
+    -- OtherKind: other_protection_means_applied
+```
+
+## Розділ III. Зберігання
+
+### Стаття 13. Зберігання електронних документів
+
+Строк зберігання електронних документів повинен бути **не меншим** від строку,
+встановленого законодавством для відповідних документів на папері (ч.2 ст.13).
+Зберігання припустиме за умов: інформація доступна для подальшого використання;
+забезпечено відновлення документа у форматі створення; за наявності — збережено
+дані про походження та призначення (ч.4 ст.13).
+
+```catala-metadata
+declaration scope StorageCompliance:
+  input state content StorageState
+  output term_sufficient content boolean
+  output storage_admissible content boolean
+```
+
+```catala
+scope StorageCompliance:
+  definition term_sufficient equals
+    state.e_storage_term_days >= state.paper_term_days
+
+  definition storage_admissible equals
+    term_sufficient
+    and state.information_accessible
+    and state.format_restorable
+    and state.origin_metadata_kept
+```
